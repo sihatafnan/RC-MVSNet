@@ -84,6 +84,9 @@ parser.add_argument('--gn', default=False,help='apply group normalization.')
 parser.add_argument('--using_apex', action='store_true', help='using apex, need to install apex')
 parser.add_argument('--sync_bn', action='store_true',help='enabling apex sync BN.')
 
+parser.add_argument('--attack', action='store_true', help='if set, apply perturbation to extrinsics')
+
+
 
 # parse arguments and check
 args = parser.parse_args()
@@ -109,8 +112,30 @@ def read_cam_file(filename):
     # intrinsics: line [7-10), 3x3 matrix
     intrinsics = np.fromstring(' '.join(lines[7:10]), dtype=np.float32, sep=' ')
     intrinsics = intrinsics.reshape((3, 3))
-    
+
+    if args.attack:
+        # Apply translation perturbation
+        extrinsics[:3, 3] += np.array([0.0005, -0.001, 0.0012])
+
+        # Apply rotation perturbation (roll, pitch, yaw in radians)
+        roll, pitch, yaw = 0.01, 0.02, 0.015
+
+        # Rotation matrices (Z-Y-X intrinsic rotations)
+        Rx = np.array([[1, 0, 0],
+                       [0, np.cos(roll), -np.sin(roll)],
+                       [0, np.sin(roll), np.cos(roll)]], dtype=np.float32)
+        Ry = np.array([[np.cos(pitch), 0, np.sin(pitch)],
+                       [0, 1, 0],
+                       [-np.sin(pitch), 0, np.cos(pitch)]], dtype=np.float32)
+        Rz = np.array([[np.cos(yaw), -np.sin(yaw), 0],
+                       [np.sin(yaw), np.cos(yaw), 0],
+                       [0, 0, 1]], dtype=np.float32)
+
+        R_delta = Rz @ Ry @ Rx  # Combined rotation
+        extrinsics[:3, :3] = R_delta @ extrinsics[:3, :3]  # Apply rotation
+
     return intrinsics, extrinsics
+
 
 # save a binary mask
 def save_mask(filename, mask):
