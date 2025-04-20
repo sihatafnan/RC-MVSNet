@@ -87,8 +87,8 @@ parser.add_argument('--sync_bn', action='store_true',help='enabling apex sync BN
 
 # parse arguments and check
 args = parser.parse_args()
-print("argv:", sys.argv[1:])
-print_args(args)
+# print("argv:", sys.argv[1:])
+# print_args(args)
 # os.environ["CUDA_VISIBLE_DEVICES"] = args.true_gpu
 
 # read an image
@@ -384,7 +384,7 @@ def filter_depth(scan_folder, out_folder, plyfilename, geo_pixel_thres, geo_dept
 
 if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = "2"
-    img_wh=(1920, 1056)
+    img_wh=(args.max_w , args.max_h)
     # img_wh=(2048, 1184)
 
     # step1. save all the depth maps and the masks in outputs directory
@@ -454,10 +454,11 @@ if __name__ == '__main__':
     # advanced dataset
     elif args.split == "advanced":
 
-        scans = ['Auditorium', 'Ballroom', 'Courtroom',
-                'Museum', 'Palace', 'Temple']
+        # scans = ['Auditorium', 'Ballroom', 'Courtroom',
+        #         'Museum', 'Palace', 'Temple']
+        scans = ['Auditorium']
         
-        image_sizes = {'Auditorium': (1920, 1080),
+        image_sizes = {'Auditorium': img_wh,
                                 'Ballroom': (1920, 1080),
                                 'Courtroom': (1920, 1080),
                                 'Museum': (1920, 1080),
