@@ -199,7 +199,7 @@ def save_depth(img_wh=(1920, 1056)):
                 save_pfm(depth_filename, depth_est)
                 # save confidence maps
                 save_pfm(confidence_filename, photometric_confidence)
-                write_depth_img_2(depth_filename + ".png", depth_est)
+                # write_depth_img_2(depth_filename + ".png", depth_est)
 
 
 # project the reference point cloud into the source view, then project back
