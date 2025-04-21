@@ -113,27 +113,6 @@ def read_cam_file(filename):
     intrinsics = np.fromstring(' '.join(lines[7:10]), dtype=np.float32, sep=' ')
     intrinsics = intrinsics.reshape((3, 3))
 
-    if args.attack:
-        # Apply translation perturbation
-        extrinsics[:3, 3] += np.array([0.0005, -0.001, 0.0012])
-
-        # Apply rotation perturbation (roll, pitch, yaw in radians)
-        roll, pitch, yaw = 0.01, 0.02, 0.015
-
-        # Rotation matrices (Z-Y-X intrinsic rotations)
-        Rx = np.array([[1, 0, 0],
-                       [0, np.cos(roll), -np.sin(roll)],
-                       [0, np.sin(roll), np.cos(roll)]], dtype=np.float32)
-        Ry = np.array([[np.cos(pitch), 0, np.sin(pitch)],
-                       [0, 1, 0],
-                       [-np.sin(pitch), 0, np.cos(pitch)]], dtype=np.float32)
-        Rz = np.array([[np.cos(yaw), -np.sin(yaw), 0],
-                       [np.sin(yaw), np.cos(yaw), 0],
-                       [0, 0, 1]], dtype=np.float32)
-
-        R_delta = Rz @ Ry @ Rx  # Combined rotation
-        extrinsics[:3, :3] = R_delta @ extrinsics[:3, :3]  # Apply rotation
-
     return intrinsics, extrinsics
 
 
@@ -178,7 +157,47 @@ def write_depth_img_2(filename, depth):
     im = Image.fromarray(colormapped_im)
     im.save(filename)
 
+def perturb_ref_camera(sample_cuda):
+    print("Camera before perturbation (ref and src extrinsics):")
+    extrinsics = sample_cuda["proj_matrices"]["stage4"][0, :, 0]  # All extrinsics in this batch
+    print(extrinsics)
 
+    for i in range(extrinsics.shape[0]):
+        extrinsic = extrinsics[i]
+        extrinsic[0, 3] += 5
+        extrinsic[1, 3] -= 10
+        extrinsic[2, 3] += 12
+
+        d_roll = torch.tensor(1, dtype=torch.float32, device=extrinsic.device)
+        d_pitch = torch.tensor(-2, dtype=torch.float32, device=extrinsic.device)
+        d_yaw = torch.tensor(1.5, dtype=torch.float32, device=extrinsic.device)
+
+        Rx = torch.tensor([
+            [1, 0, 0],
+            [0, torch.cos(d_roll), -torch.sin(d_roll)],
+            [0, torch.sin(d_roll), torch.cos(d_roll)]
+        ], dtype=torch.float32, device=extrinsic.device)
+
+        Ry = torch.tensor([
+            [torch.cos(d_pitch), 0, torch.sin(d_pitch)],
+            [0, 1, 0],
+            [-torch.sin(d_pitch), 0, torch.cos(d_pitch)]
+        ], dtype=torch.float32, device=extrinsic.device)
+
+        Rz = torch.tensor([
+            [torch.cos(d_yaw), -torch.sin(d_yaw), 0],
+            [torch.sin(d_yaw), torch.cos(d_yaw), 0],
+            [0, 0, 1]
+        ], dtype=torch.float32, device=extrinsic.device)
+
+        R_delta = Rz @ Ry @ Rx
+        extrinsic[:3, :3] = R_delta @ extrinsic[:3, :3]
+        sample_cuda["proj_matrices"]["stage4"][0, i, 0] = extrinsic
+
+    print("Camera after perturbation (ref and src extrinsics):")
+    print(sample_cuda["proj_matrices"]["stage4"][0, :, 0])
+
+    return sample_cuda
 # run MVS model to save depth maps
 def save_depth(img_wh=(1920, 1056)):
     # dataset, dataloader
@@ -204,6 +223,8 @@ def save_depth(img_wh=(1920, 1056)):
         for batch_idx, sample in enumerate(TestImgLoader):
             start_time = time.time()
             sample_cuda = tocuda(sample)
+            if args.attack:
+                sample_cuda = perturb_ref_camera(sample_cuda)
             # outputs = model(sample_cuda["imgs"], sample_cuda["proj_matrices"], sample_cuda["depth_min"], sample_cuda["depth_max"])
             outputs = model(sample_cuda["imgs"], sample_cuda["proj_matrices"], sample_cuda["depth_values"])
 
